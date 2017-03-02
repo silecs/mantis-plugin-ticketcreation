@@ -15,7 +15,7 @@ class TicketCreationPlugin extends MantisPlugin
     {
         $this->name = 'Ticket Creation';
         $this->description = "Plugin that creates a 'bug report page' that can be pre-filled by URL parameters.";
-        $this->page = 'status';
+        $this->page = 'bugreport';
 
         $this->version = '1.0';
         $this->requires = [
