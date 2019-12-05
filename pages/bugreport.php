@@ -1,4 +1,6 @@
 <?php
+header("Content-Security-Policy: script-src 'sha256-T2Bm0UETkbb+D4NPBhb1WgUTylrw6oZt3ijsWKHJmGg='");
+
 $g_allow_browser_cache = 0;
 
 require_api( 'access_api.php' );
@@ -225,6 +227,25 @@ if( $t_show_attachments ) {
 					print_category_option_list( $f_category_id );
 					?>
 					</select>
+<?php
+if (!$f_category_id) {
+	// if there is a single "Bug" category, select it by default
+?>
+	<script>
+	var categories = document.querySelectorAll('#category_id option');
+	var bugCategories = [];
+	for (e of categories) {
+		if (e.innerText.match(/\bbug/i)) {
+			bugCategories.push(e);
+		}
+	}
+	if (bugCategories.length === 1) {
+		bugCategories[0].selected = true;
+	}
+	</script>
+<?php
+}
+?>
 				</span>
 				<span class="label-style"></span>
 			</div>
