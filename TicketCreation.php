@@ -9,6 +9,11 @@
 class TicketCreationPlugin extends MantisPlugin
 {
     /**
+     * @var string
+     */
+    public $nonce;
+
+    /**
      * Init the plugin attributes.
      */
     function register()
@@ -17,9 +22,9 @@ class TicketCreationPlugin extends MantisPlugin
         $this->description = "Plugin that creates a 'bug report page' that can be pre-filled by URL parameters.";
         $this->page = 'bugreport';
 
-        $this->version = '1.0';
+        $this->version = '2.0';
         $this->requires = [
-            'MantisCore' => '1.3.0, < 2.0',
+            'MantisCore' => '2.0.0',
         ];
 
         $this->author = 'François Gannaz / Silecs';
