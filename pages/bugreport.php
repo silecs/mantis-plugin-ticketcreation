@@ -1,5 +1,55 @@
 <?php
+# MantisBT - A PHP based bugtracking system
 
+# MantisBT is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# MantisBT is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with MantisBT.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * This file POSTs data to report_bug.php
+ *
+ * @package MantisBT
+ * @copyright Copyright 2000 - 2002  Kenzaburo Ito - kenito@300baud.org
+ * @copyright Copyright 2002  MantisBT Team - mantisbt-dev@lists.sourceforge.net
+ * @link http://www.mantisbt.org
+ *
+ * @uses core.php
+ * @uses access_api.php
+ * @uses authentication_api.php
+ * @uses bug_api.php
+ * @uses collapse_api.php
+ * @uses columns_api.php
+ * @uses config_api.php
+ * @uses constant_inc.php
+ * @uses custom_field_api.php
+ * @uses date_api.php
+ * @uses error_api.php
+ * @uses event_api.php
+ * @uses file_api.php
+ * @uses form_api.php
+ * @uses gpc_api.php
+ * @uses helper_api.php
+ * @uses html_api.php
+ * @uses lang_api.php
+ * @uses print_api.php
+ * @uses profile_api.php
+ * @uses project_api.php
+ * @uses relationship_api.php
+ * @uses string_api.php
+ * @uses utility_api.php
+ * @uses version_api.php
+ */
+
+require_once( 'core.php' );
 require_api( 'access_api.php' );
 require_api( 'authentication_api.php' );
 require_api( 'bug_api.php' );
@@ -25,78 +75,51 @@ require_api( 'string_api.php' );
 require_api( 'utility_api.php' );
 require_api( 'version_api.php' );
 
-$f_master_bug_id = gpc_get_int( 'm_id', 0 );
-
 /* <silecs_change> */
-$f_project_id   = gpc_get_string( 'project_id', '' );
-if ($f_project_id) {
-    helper_set_current_project( $f_project_id );
+$data = $_SESSION['r'] ?? null;
+if (!$data) {
+    die("Soumission incorrecte");
+}
+unset($_SESSION['r']);
+$f_project_id   = $data['project_id'];
+if( $f_project_id != helper_get_current_project() ) {
+    # in case the current project is not the same project of the bug we are viewing...
+    # ... override the current project. This to avoid problems with categories and handlers lists etc.
     $g_project_override = $f_project_id;
     $t_changed_project = true;
+} else {
+    $t_changed_project = false;
 }
 /* </silecs_change> */
 
-{
-	# Get Project Id and set it as current
-	$t_current_project = helper_get_current_project();
-	$t_project_id = gpc_get_int( 'project_id', $t_current_project );
-
-	# If all projects, use default project if set
-	$t_default_project = user_pref_get_pref( auth_get_current_user_id(), 'default_project' );
-	if( ALL_PROJECTS == $t_project_id && ALL_PROJECTS != $t_default_project ) {
-		$t_project_id = $t_default_project;
-	}
-
-	# Check for bug report threshold
-	if( !access_has_project_level( config_get( 'report_bug_threshold' ) ) ) {
-		# If can't report on current project, show project selector if there is any other allowed project
-		access_ensure_any_project_level( 'report_bug_threshold' );
-		print_header_redirect( 'login_select_proj_page.php?ref=bug_report_page.php' );
-	}
-
-	if( ( ALL_PROJECTS == $t_project_id || project_exists( $t_project_id ) )
-		&& $t_project_id != $t_current_project
-		&& project_enabled( $t_project_id ) ) {
-		helper_set_current_project( $t_project_id );
-		# Reloading the page is required so that the project browser
-		# reflects the new current project
-		print_header_redirect( $_SERVER['REQUEST_URI'], true, false, true );
-	}
-
-	# New issues cannot be reported for the 'All Project' selection
-	if( ALL_PROJECTS == $t_current_project ) {
-		print_header_redirect( 'login_select_proj_page.php?ref=bug_report_page.php' );
-	}
-
+// FROM bug_report_page.php
 	access_ensure_project_level( config_get( 'report_bug_threshold' ) );
 
-	$f_build				= gpc_get_string( 'build', '' );
-	$f_platform				= gpc_get_string( 'platform', '' );
-	$f_os					= gpc_get_string( 'os', '' );
-	$f_os_build				= gpc_get_string( 'os_build', '' );
-	$f_product_version		= gpc_get_string( 'product_version', '' );
-	$f_target_version		= gpc_get_string( 'target_version', '' );
-	$f_profile_id			= gpc_get_int( 'profile_id', 0 );
-	$f_handler_id			= gpc_get_int( 'handler_id', 0 );
+	$f_build				= "";
+	$f_platform				= "";
+	$f_os					= "";
+	$f_os_build				= "";
+	$f_product_version		= "";
+	$f_target_version		= "";
+	$f_profile_id			= 0;
+	$f_handler_id			= 0;
 
-	$f_category_id			= gpc_get_int( 'category_id', 0 );
-	$f_reproducibility		= gpc_get_int( 'reproducibility', (int)config_get( 'default_bug_reproducibility' ) );
-	$f_eta					= gpc_get_int( 'eta', (int)config_get( 'default_bug_eta' ) );
-	$f_severity				= gpc_get_int( 'severity', (int)config_get( 'default_bug_severity' ) );
-	$f_priority				= gpc_get_int( 'priority', (int)config_get( 'default_bug_priority' ) );
-	$f_summary				= gpc_get_string( 'summary', '' );
-	$f_description			= gpc_get_string( 'description', config_get( 'default_bug_description' ) );
-	$f_steps_to_reproduce	= gpc_get_string( 'steps_to_reproduce', config_get( 'default_bug_steps_to_reproduce' ) );
-	$f_additional_info		= gpc_get_string( 'additional_info', config_get( 'default_bug_additional_info' ) );
-	$f_view_state			= gpc_get_int( 'view_state', (int)config_get( 'default_bug_view_status' ) );
-	$f_due_date				= gpc_get_string( 'due_date', date_strtotime( config_get( 'due_date_default' ) ) );
+	$f_category_id			= 0;
+	$f_reproducibility		= (int)config_get( 'default_bug_reproducibility' );
+	$f_eta					= (int)config_get( 'default_bug_eta' );
+	$f_severity				= (int)config_get( 'default_bug_severity' );
+	$f_priority				= (int)config_get( 'default_bug_priority' );
+	$f_summary				= $data['summary'];
+	$f_description			= $data['description'];
+	$f_steps_to_reproduce	= $data['steps_to_reproduce'];
+	$f_additional_info		= $data['additional_info'];
+	$f_view_state			= (int)config_get( 'default_bug_view_status' );
+	$f_due_date				= date_strtotime( config_get( 'due_date_default' ) );
 
-	if( $f_due_date == '' ) {
-		$f_due_date = date_get_null();
-	}
+	$t_project_id			= $f_project_id;
+	$f_master_bug_id = 0;
 
-	$t_changed_project		= false;
-}
+
 
 $f_report_stay			= gpc_get_bool( 'report_stay', false );
 $f_copy_notes_from_parent         = gpc_get_bool( 'copy_notes_from_parent', false );
@@ -173,16 +196,15 @@ if( $t_show_attachments ) {
 		$t_allow_no_category = config_get( 'allow_no_category' );
 ?>
 	<tr>
-		<th class="category" width="30%">
-			<?php
-			echo $t_allow_no_category ? '' : '<span class="required">*</span> ';
-			echo '<label for="category_id">';
-			print_documentation_link( 'category' );
-			echo '</label>';
-			?>
+		<th class="category width-30">
+			<?php echo $t_allow_no_category ? '' : '<span class="required">*</span> '; ?>
+			<label for="category_id">
+				<?php print_documentation_link( 'category' ); ?>
+			</label>
 		</th>
-		<td width="70%">
+		<td>
 			<?php if( $t_changed_project ) {
+				/** @noinspection PhpUndefinedVariableInspection */
 				echo '[' . project_get_field( $t_bug->project_id, 'name' ) . '] ';
 			} ?>
 			<select id="category_id" name="category_id" class="autofocus input-sm" <?php
@@ -190,7 +212,7 @@ if( $t_show_attachments ) {
 				echo $t_allow_no_category ? '' : ' required';
 			?>>
 				<?php
-					print_category_option_list( $f_category_id );
+					print_category_option_list( $f_category_id, null, true );
 				?>
 			</select>
 		</td>
@@ -295,7 +317,7 @@ if( $t_show_attachments ) {
 			<?php echo lang_get( 'or_fill_in' ); collapse_icon( 'profile' ); ?>
 			<table class="table-bordered table-condensed">
 				<tr>
-					<th class="category" width="30%">
+					<th class="category width-30">
 						<label for="platform"><?php echo lang_get( 'platform' ) ?></label>
 					</th>
 					<td>
@@ -419,7 +441,7 @@ if( $t_show_attachments ) {
 			<label for="status"><?php echo lang_get( 'status' ) ?></label>
 		</th>
 		<td>
-			<select <?php echo helper_get_tab_index() ?> name="status" class="input-sm">
+			<select id="status" <?php echo helper_get_tab_index() ?> name="status" class="input-sm">
 			<?php
 			$t_resolution_options = get_status_option_list(
 				access_get_project_level( $t_project_id ),
@@ -444,7 +466,7 @@ if( $t_show_attachments ) {
 			<label for="resolution"><?php echo lang_get( 'resolution' ) ?></label>
 		</th>
 		<td>
-			<select <?php echo helper_get_tab_index() ?> name="resolution" class="input-sm">
+			<select id="resolution" <?php echo helper_get_tab_index() ?> name="resolution" class="input-sm">
 				<?php
 				print_enum_string_option_list( 'resolution', config_get( 'default_bug_resolution' ) );
 				?>
@@ -461,7 +483,7 @@ if( $t_show_attachments ) {
 		</th>
 		<td>
 			<select <?php echo helper_get_tab_index() ?> id="target_version" name="target_version" class="input-sm">
-				<?php print_version_option_list( '', null, VERSION_FUTURE ) ?>
+				<?php print_version_option_list( $f_target_version, null, VERSION_FUTURE ) ?>
 			</select>
 		</td>
 	</tr>
@@ -469,7 +491,8 @@ if( $t_show_attachments ) {
 <?php event_signal( 'EVENT_REPORT_BUG_FORM', array( $t_project_id ) ) ?>
 	<tr>
 		<th class="category">
-			<span class="required">*</span><label for="summary"><?php print_documentation_link( 'summary' ) ?></label>
+			<span class="required">*</span>
+			<label for="summary"><?php print_documentation_link( 'summary' ) ?></label>
 		</th>
 		<td>
 			<input <?php echo helper_get_tab_index() ?> type="text" id="summary" name="summary" size="105" maxlength="128" value="<?php echo string_attribute( $f_summary ) ?>" required />
@@ -477,7 +500,8 @@ if( $t_show_attachments ) {
 	</tr>
 	<tr>
 		<th class="category">
-			<span class="required">*</span><label for="description"><?php print_documentation_link( 'description' ) ?></label>
+			<span class="required">*</span>
+			<label for="description"><?php print_documentation_link( 'description' ) ?></label>
 		</th>
 		<td>
 			<?php # Newline after opening textarea tag is intentional, see #25839 ?>
@@ -525,7 +549,7 @@ if( $t_show_attachments ) {
 					# pre-fill tag string when cloning from master bug
 					$t_tags = [];
 					foreach( tag_bug_get_attached( $f_master_bug_id ) as $t_tag ) {
-						array_push( $t_tags, $t_tag["name"] );
+						$t_tags[] = $t_tag["name"];
 					}
 					$t_tag_string = implode(
 						config_get( 'tag_separator' ), $t_tags
@@ -560,9 +584,9 @@ if( $t_show_attachments ) {
 			<?php if( $t_def['require_report'] ) {?><span class="required">*</span><?php } ?>
 			<?php if( $t_def['type'] != CUSTOM_FIELD_TYPE_RADIO && $t_def['type'] != CUSTOM_FIELD_TYPE_CHECKBOX ) { ?>
 				<label for="custom_field_<?php echo string_attribute( $t_def['id'] ) ?>">
-					<?php echo string_display_line( lang_get_defaulted( $t_def['name'] ) ) ?>
+					<?php echo string_attribute( lang_get_defaulted( $t_def['name'] ) ) ?>
 				</label>
-			<?php } else { echo string_display_line( lang_get_defaulted( $t_def['name'] ) ); } ?>
+			<?php } else { echo string_attribute( lang_get_defaulted( $t_def['name'] ) ); } ?>
 		</th>
 		<td>
 			<?php print_custom_field_input( $t_def, ( $f_master_bug_id === 0 ) ? null : $f_master_bug_id, $t_def['require_report'] ) ?>
